@@ -1,0 +1,410 @@
+---
+title: "CS555 Final Project"
+author: "Tommy Lee"
+date: "12/9/2021"
+output: pdf_document
+---
+Data from Kaggle that originated from Spotify:
+https://www.kaggle.com/vicsuperman/prediction-of-music-genre
+
+Background: This Kaggle dataset was originally extracted from Spotify's API and originally contained about 50,000 rows. 
+For my research project, I wanted to analyze three specific music genres: anime(japanese animation, normally sung by 
+j-pop stars), electronic(short for electronic dance music) and hip-hop. Overall, I am interested to see the differences
+between these music genres (specifically how anime music genre is doing) and can Spotify songs be modeled based on their
+audio features or characteristics.
+
+Below are the specific research questions we are interested in:
+
+1. Do any of the audio features have a relationship with the popularity of a song?
+   (I will be using linear regression to check if there is a linear relationship.)
+2. Is there a popularity difference between music genres?
+   (I will be using ANOVA to check the mean popularity difference for the three groups.)
+3. Can we correctly predict whether a Spotify song is an anime (music genre) song?
+   (I will be using logistic regression to build a classifier.)
+
+Below are the different variables we will be working with:
+
+* music_genre: "Anime", "Hip-Hop" or "Electronic"
+* popularity: how popular a song is on a scale of 0 to 100
+* danceability: how likely you would dance to this song on scale of 0 to 1
+* duration_ms: song duration in milliseconds
+* tempo: beats per minute
+* valence: The higher the value, the more positive mood for the song on a scale of 0 to 1
+* energy: The energy of a song - the higher the value, the more energetic song on a scale of 0 to 1
+* speechiness: the higher the value, the more lyrics the song has on a scale of 0 to 1
+
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(scipen = 999)
+```
+
+
+##  Clean Dataset
+```{r,message=FALSE}
+library(dplyr)
+set.seed(1)
+# Read data
+df <- read.csv('C:/Users/Tommy Lee/Desktop/CS 555/CS555_Final_Project/music_genre.csv')
+
+# Only interested in 3 genre
+df_interest <- subset(df, subset = music_genre %in% c('Anime','Hip-Hop','Electronic'))
+
+# Sample only 1000
+df_interest_small <- df_interest %>%  sample_n(size = 1000)
+
+
+# Select only the columns I am interested in
+df_interest_cleaned <- df_interest_small[c('music_genre','popularity','danceability',
+                        'duration_ms','tempo','valence','energy','speechiness')]
+
+# Convert tempo column to double
+df_interest_cleaned['tempo'] <- as.double(df_interest_cleaned$tempo)
+
+# Remove -1 in duration_ms column (invalid values)
+df_interest_cleaned <- subset(df_interest_cleaned, subset = duration_ms != -1)
+
+# Remove NA values 
+df_interest_cleaned <- na.omit(df_interest_cleaned)
+
+
+# Sample of cleaned dataset
+head(df_interest_cleaned,3)
+```
+After reading in the csv file, I filtered only the three genres I was interested in (Anime,Hip-Hop,Electronic). I then took a sample of 1000 from that filtered dataframe. Then, I subsetted certain columns that would be useful in my analysis. I converted the tempo column to a double data type so I can use it in modeling versus as a factor.Lastly, I removed invalid values such as null and -1 from the duration_ms column (duration should be positive).
+
+\pagebreak
+## Linear Regression Model
+## (1) Do any of the audio features have a relationship with the popularity of a song?
+```{r}
+library(psych)
+library(dplyr)
+# Count per music genre
+knitr::kable(df_interest_cleaned %>% count(music_genre) , digits = 2,
+             caption = "Counts Per Music Genre")
+
+# Correlation matrix and scatter plot combo
+pairs.panels(df_interest_cleaned[c('popularity','danceability','duration_ms',
+                                   'tempo','valence','energy','speechiness')])
+```
+Based on the pairwise plot above, a multiple linear regression model would not be ideal considering that almost all the variables have a very weak association with popularity.Speechiness variable has moderatly positive association, but it violates the linearity assumption. However, the danceability variable has a moderate positive association with popularity (0.48) and shows somewhat a linear relationship meaning we can probably create a simple linear regression model using danceability as the explanatory variable and popularity as the response variable.
+
+Let us go ahead and create the simple linear regression model for popularity and danceability.
+```{r}
+# Linear regression model
+m <- lm(df_interest_cleaned$popularity~df_interest_cleaned$danceability)
+cat('The linear regression model is y = ',round(m$coefficients[1],2),' + ', 
+    round(m$coefficients[2],2),'\U03B2\u2081\n',sep = '')
+
+cat('\U03B2\u2080 =',round(m$coefficients[2],2),'is the slope and it means for every 
+0.1 unit increase in danceability,there is a 4.572 increase popularity for a Spotifty song.')
+      
+# Scatterplot w/ regression line
+plot(df_interest_cleaned$popularity~df_interest_cleaned$danceability,
+     pch = 8,cex = 1.5, col = 'dark green',
+     xlab = 'Danceability',ylab = 'Popularity',
+     main = 'Scatterplot of Danceability vs Popularity')
+abline(m,col = 'red',lwd = '2')
+```
+
+Now that we have our simple linear regression model, lets make sure that this relationship was not by chance and do some hypothesis testing.
+```{r}
+# ANOVA table
+anova(m)
+```
+
+(Let the danceability variable be known as $\beta_1$)
+
+Step 1: 
+
+* H0: $\beta_1$=0  (there is no linear association between danceability and popularity);
+* H1: $\beta_1$ $\not=$ 0 (there is a linear association between danceability and popularity);
+* $\alpha$ = 0.05;
+
+Step 2: Use F test with df of 1 and 802 & p-value
+
+
+Step 3: Decision Rule:
+We reject the  null hypothesis if F $\ge$ 3.853 or p < 0.05.
+```{r}
+paste('This is the F-value we are comparing to',round(qf(0.05,1,802,lower.tail = FALSE),3))
+```
+
+Step 4: Calculating F-stats and p-value (values grabbed from ANOVA table)
+```{r}
+sum_m <- summary(m)
+sum_m
+f_stat <- sum_m$fstatistic[1]
+paste('The F-statistic is',f_stat)
+
+anova_m <- anova(m)
+paste('The p-value for \U03B2\u2081 is',anova_m$`Pr(>F)`[1])
+```
+
+```{r}
+# R squared
+paste('This is the R squared:',round(sum_m$r.squared,3))
+
+# 95% confidence interval for beta1
+confid <- confint(m, level = 0.95)
+paste('The 95% confidence interval for \U03B2\u2081 is [',round(confid[2,1],3),
+      ',',round(confid[2,2],3),']')
+```
+
+
+
+Step 5: Conclusion
+We reject the null hypothesis since our F-stat 242.96 $\ge$ 3.853.
+Also, the p-value is almost zero backing up our conclusion of rejecting the null hypothesis.
+Therefore, we have significant evidence at $\alpha$ level 0.05 that $\beta_1$ $\not=$ 0. This proves that there
+is a linear relationship between danceability and popularity for Spotify songs.
+
+$\beta_1$ is interpretted as for every one unit increase in danceability, there is a 45.721 increase in popularity.
+Let us interpret that with smaller units since popularity is on a scale of 100: for every 0.1 unit in danceability, there is a 4.5721 increase in popularity.
+
+Calculating R squared equals 0.233 shows that the proportion of the variance 
+for the popularity of a Spotify is weakly explained by its danceability.
+
+Calculating a 95% confidence interval, We are 95% confident 
+that the true $\beta_1$ (danceability) is between [39.964,51.479].
+
+
+
+Lets check if our residuals hold up on the assumptions for a linear regression model.
+```{r}
+# Residual plot
+plot(m,which = 1,pch = 20)
+hist(resid(m),col = 'sky blue',main = 'Histogram of Residuals',xlab = 'Residuals' )
+```
+
+
+We also need to test whether removing any outliers will help increase R squared.
+```{r}
+# Removal of each outlier for later to plot
+remove_df1 <- df_interest_cleaned[c(-26),]
+remove_df2 <- df_interest_cleaned[c(-63),]
+remove_df3 <- df_interest_cleaned[c(-102),]
+m1 <- lm(remove_df1$popularity~remove_df1$danceability)
+m2 <- lm(remove_df2$popularity~remove_df2$danceability)
+m3 <- lm(remove_df3$popularity~remove_df3$danceability)
+
+plot(df_interest_cleaned$popularity~df_interest_cleaned$danceability,
+     pch = 8,cex = 1.5, col = 'dark green',
+     xlab = 'Danceability',ylab = 'Popularity',
+     main = 'Scatterplot of Danceability vs Popularity')
+abline(m,col = 'red',lwd = '2')
+abline(m2,col = 'green',lwd = '2')
+abline(m3,col = 'blue',lwd = '2')
+
+cat('This is the original R-squared:',round(summary(m)$r.squared,5),'.These are 
+the R-squared after removing data point ID 41,46,53 and all of them at once:\n',
+round(summary(m1)$r.squared,5),',',
+round(summary(m2)$r.squared,5),',',
+round(summary(m3)$r.squared,5))
+
+
+```
+For the residual plot, there is linearity since the points are dispersed randomly. The variance is slightly constant,
+but there are some points that show the data existing more in the middle rather being evenly dispersed.
+Based on the histogram of the residuals, there is normality as we can see a bell-shaped curve. 
+As for independence, each song should have an unique danceability value since one song cannot affect 
+another song's danceability.
+
+There are 3 outliers based on the residual plot IDs 26,63,102. After removing these outliers one-by-one and all together
+at once, we notice almost no change to R squared. Also based on the scatter plot, the regression lines are overlapping
+and barely different from each other. Therefore, there are outliers, but no influence points.
+
+
+
+\pagebreak
+## ANOVA
+## (2) Are the mean popularity levels different between music genres?
+```{r}
+# Group by Music Genre
+tt<-data.frame(Means=tapply(X=df_interest_cleaned$popularity, 
+              INDEX=df_interest_cleaned$music_genre, FUN=mean), 
+           SDS=tapply(X=df_interest_cleaned$popularity, 
+               INDEX=df_interest_cleaned$music_genre, FUN=sd),
+           n=as.numeric(table(df_interest_cleaned$music_genre)))
+knitr::kable(tt, digits = 2,caption = "Summary of Popularity per Music Genre")
+
+
+# Boxplot of popularity 
+boxplot(df_interest_cleaned$popularity~df_interest_cleaned$music_genre,col = 'dark green'
+        ,xlab = 'Groups',ylab = 'Popularity',
+        main = 'Boxplot of Music Genres and Their Popularity' )
+
+points(x=1:3, y=tt$Means, col="red", pch=17)
+```
+
+## One-way ANOVA test
+Step 1: 
+
+* H0: $\mu_1$= $\mu_2$ = $\mu_3$  (All music genre's popularity means are equal);
+* H1: $\mu_1$ $\not=$ $\mu_2$ $\not=$ $\mu_3$  (Not all music genre's popularity means are equal);
+* $\alpha$ = 0.05;
+        
+Step 2 & 4: Use F test with df of 2 and 801 & p-value
+```{r}
+# Convert student group to a factor
+df_interest_cleaned$music_genre <- as.factor(df_interest_cleaned$music_genre)
+am <- aov(df_interest_cleaned$popularity~df_interest_cleaned$music_genre)
+
+# F critical value
+summary(am)
+```
+
+
+
+Step 3: Decision Rule:
+We reject the  null hypothesis if F $\ge$ 3.007 or p < 0.05.
+```{r}
+paste('This is the F-value we are comparing to:',round(qf(0.05,2,801,lower.tail = FALSE),4))
+```
+
+
+Step 5:
+We reject the null hypothesis since our F-stat 948.1 $\ge$ 3.007.
+Also, the p-value is less than 0.05  backing up our conclusion of rejecting the null hypothesis.
+Therefore, we have significant evidence at $\alpha$ level 0.05 that there is a mean difference in popularity 
+between music genres.
+
+
+# Tukey's method
+```{r}
+TukeyHSD(am)
+```
+After adjusting the p-value using Tukey's method, we can see that there is significant evidence 
+at $\alpha$ level 0.05 that the popularity mean difference is differnt between all music genres.
+
+We are 95% confident that Electronic music genre is 12.33 to 16.07 
+points more popular than Anime music genre with an average of 14.20 points more popular.
+
+We are 95% confident that Hip-Hop music genre is 31.36 to 34.96 
+points more popular than Anime music genre with an average of 33.16 points more popular.
+
+We are 95% confident that Hip-Hop music genre is 17.12 to 20.79
+points more popular than Electronic music genre with an average of 18.96 points more popular.
+
+
+
+\pagebreak
+## Logistic Regression Model 
+## (3) Can we correctly predict whether a Spotify song is an anime song?
+```{r}
+library(aod)
+#Create dummy variable for anime song classification
+df_interest_cleaned$g_anime <- ifelse(df_interest_cleaned$music_genre== 'Anime', 1, 0)
+# Create multiple logistic regression model
+log_m<- glm(g_anime~popularity + danceability + duration_ms+tempo + valence + energy + speechiness,
+         data = df_interest_cleaned,
+         family=binomial)
+summary(log_m)
+
+# Wald test
+wald.test(b=coef(log_m), Sigma = vcov(log_m), Terms = 2:8)
+```
+The Wald test was the global test to make sure at least one variable that has an association with
+anime music genre. Since the p-value is 0 which is less than $\alpha$ =0.05 level, there is 
+statistically significant evidence that there is at least one variable that has an association with
+anime music genre.
+
+Lets use only statistically significant variables for our multiple logistic regression model.
+```{r}
+# ROC curve # install.package("pROC")
+library(pROC)
+log_m2<- glm(g_anime~popularity + danceability + duration_ms + valence  + speechiness,
+         data = df_interest_cleaned,
+         family=binomial)
+summary(log_m2)
+
+
+
+odds_df <- data.frame(rbind(exp(cbind(OR = coef(log_m2), confint.default(log_m2)))[2,],
+           exp(cbind(OR = coef(log_m2), confint.default(log_m2))/100)[3,],
+           exp(cbind(OR = coef(log_m2), confint.default(log_m2)))[4,],
+           exp(cbind(OR = coef(log_m2), confint.default(log_m2))/100)[5,],
+           exp(cbind(OR = coef(log_m2), confint.default(log_m2))/100)[6,]),
+          row.names = c('Popularity','Danceability(100th of a unit)','Duration_MS',
+                        'Valence(100th of a unit)','Speechiness(100th of a unit)'))
+colnames(odds_df) <- c('Odds Ratio','Lower Bound (95% CI)','Upper Bound (95% CI)')
+odds_df
+```
+Reject H0:$\beta$popularity=0 or Odd Ratio popularity=1 after adjusting for danceability,duration_ms,valence and speechiness. We have significant evidence at the $\alpha$ =0.05 level that$\beta$popularity$\not=$ 0 since p-value is almost zero. That is, there is evidence of an association between anime music genre and popularity after adjusting for danceability,duration_ms,valence and speechiness. This means that for every 1 unit increase in popularity is associated with about a 14% decrease of being an anime song. We are 95% confident that the true odds ratio between anime music genre and popularity is between 0.835 and 0.884 after adjusting for danceability,duration_ms,valence and speechiness.
+
+Reject H0:$\beta$danceability=0 or Odd Ratio danceability=1 after adjusting for popularity,duration_ms,valence and speechiness. We have significant evidence at the $\alpha$ =0.05 level that$\beta$danceability$\not=$ 0 since p-value 0.0171 $\le$ 0.05. That is, there is evidence of an association between anime music genre and danceability after adjusting for popularity,duration_ms,valence and speechiness. This means that for every 0.01 unit increase in danceability is associated with about a 10% decrease of being an anime song. We are 95% confident that the true odds ratio between anime music genre and danceability in 100th of a unit is between 0.88 and 0.92 after adjusting for popularity,duration_ms,valence and speechiness.
+
+Reject H0:$\beta$duration_ms=0 or Odd Ratio duration_ms=1 after adjusting for danceability,popularity,valence and speechiness. We have significant evidence at the $\alpha$ =0.05 level that$\beta$duration_ms$\not=$ 0 since p-value is almost zero. That is, there is evidence of an association between anime music genre and duration_ms after adjusting for danceability,popularity,valence and speechiness. This means that for every 1 millisecond increase in the song is associated with less than a 0.0001% decrease of being an anime song. We are 95% confident that the true odds ratio between anime music genre and duration_ms is between 0.9999920 and 0.9999992 after adjusting for danceability,popularity,valence and speechiness.
+
+Reject H0:$\beta$valence=0 or Odd Ratio valence=1 after adjusting for danceability,duration_ms,popularity and speechiness. We have significant evidence at the $\alpha$ =0.05 level that$\beta$valence$\not=$ 0 since p-value is almost zero. That is, there is evidence of an association between anime music genre and valence after adjusting for danceability,duration_ms,popularity and speechiness. This means that for every 0.01 unit increase in valence is associated with about a 3.8% increase of being an anime song. We are 95% confident that the true odds ratio between anime music genre and valence in 100th of a unit is between 1.269 and 1.65 after adjusting for danceability,duration_ms,popularity and speechiness.
+
+Reject H0:$\beta$speechiness=0 or Odd Ratio speechiness=1 after adjusting for danceability,duration_ms,valence and popularity. We have significant evidence at the $\alpha$ =0.05 level that$\beta$speechiness$\not=$ 0 since p-value is almost zero. That is, there is evidence of an association between anime music genre and speechiness after adjusting for danceability,duration_ms,valence and popularity. This means that for every 0.01 unit increase in speechiness is associated with about a 9% decrease of being an anime song. We are 95% confident that the true odds ratio between anime music genre and speechiness in 100th of a unit is between 0.877 and 0.947 after adjusting for danceability,duration_ms,valence and popularity.
+
+
+```{r}
+# Predicted values
+df_interest_cleaned$prob2 <-predict(log_m2, type=c("response"))
+
+
+# Build a ROC curve
+g2 <- roc(df_interest_cleaned$g_anime ~ df_interest_cleaned$prob2)
+
+# see the results - c-statistics value
+print(g2)
+
+# plot the ROC Curve
+plot(1-g2$specificities, g2$sensitivities, type = "l",
+xlab = "1 - Specificity", ylab = "Sensitivity", main = "ROC Curve for Multiple Logistic Regression Model")
+abline(a=0,b=1)
+grid()
+```
+ 
+Our c-statistics (aka area under the ROC curve) equals 0.9649 which is very high meaning
+this multiple logistic model is a good fit to determine whether a song is an anime song.
+
+
+\pagebreak
+## Conclusion & Results
+The dataset I am working with for this analysis is a sample of 1000 songs and their audio features 
+or characteristics originally extracted from Spotify's API. The three music genres I am interested 
+in analyzing are  Anime, Electronic, and Hip-Hop. My project goals are to see if the music genre
+anime has any differences between the other two genres and if we can create predictive models.
+
+My first question was to see if any of the audio features or characteristics have a linear relationship 
+with popularity. Multiple linear regression was not a good fit for this question because as seen in the 
+pairwise plot, we see that almost all variables have very little to no correlation or show no signs of linearity
+with popularity. The danceability variable does seem to have some signs of linearity and after running through
+a simple linear regression model with popularity as response variable and danceability as explanatory variable,
+we see that for every 0.1 unit in danceability, there is a 4.5721 increase in popularity "points". Also, based on the
+residual plots, the four conditions of least-squares regression (linearity,normality,independence, and constant variance)
+hold true. Constant variance is debatable, but overall its pretty constant.
+This proves that danceability is correlated with popularity.
+
+My second question was to see if the average popularity is different between the three music genres. Using 
+an one-way ANOVA and the boxplot, we can see that the average popularity between music genres are different.
+Using pairwise tests, we concluded that in order of lowest to highest popularity: anime, electronic and hip-hop.
+Unfortunately, that means anime is not as popular as electronic and hip-hop.
+
+My third question was see if we can build a classifier to identify whether a song is anime music genre or not based
+on audio features. Using multiple logistic regression, we built a predictive model that works splendidly. The model 
+can classify an anime song based on a song's danceability, duration in milliseconds, valence and speechiness.
+
+In terms of limitations and concerns, the simple linear regression model may not be the best model for determining
+popularity even though the math says otherwise. Popularity should be considered by other variables other than just
+how danceable the song is. Another concern is how the dataset originally classified the music genres. Songs can have
+multiple genres, but maybe Spotify has limitations on outputting multiple genres in the dataset.
+
+Back to the project goal and above results, we can say that the anime music genre (unfortunately) is not very popular 
+as opposed to electronic and hip-hop music. The simple linear regression model helps us conclude that the more 
+we want to dance to a song, the more likely the song is popular. This holds true as popular songs (electronic and hip-hop) 
+are played in public places such as bars,clubs and parties versus anime songs which are usually played in conventions that
+occur only a few times a year and sometimes Japanese malls/stores. As for the classification of whether a song is anime or not,
+danceability and valence I can see those variables as good predictors, but duration_ms and speechiness were unexpectedly part of 
+the model as I would have not expected those variables to have any association with classifying an anime song.
+
+
+
+
+
