@@ -11,7 +11,10 @@ Using ANOVA, I was able to determine test if there is a mean popularity differen
 
 FILES:
 -"CS555_Final_Project_Lee.pdf": Analysis and Code
+
 -"CS555_Final_Project_Lee.Rmd": R markdown of analysis and code
+
 -"music_genre.csv": Spotify dataset
+
 
 
