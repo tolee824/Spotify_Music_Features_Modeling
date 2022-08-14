@@ -1,22 +1,30 @@
 # Spotify Music Features Modeling Project
 
-Spotify's API offers data regarding music features of songs (ex: tempo, popularity and duration) which can be used for modeling and hypothesis testing.
 
-Using linear regression, I built a predictive model to determine a song's popularity
+#### -- Project Status: [Completed] 
 
-Using logistic regression, I built a classification model to identify whether a song belongs to a certain genre or not.   
-  
-Using Analysis of Variance (ANOVA), I was able to test if there is a mean popularity difference between music genres.
+## Project Description
+Spotify's API offers data regarding music features of songs (ex: tempo, popularity and duration) which can be used for modeling and hypothesis testing. Using a sample of 1000 records from the approximately 50,000 recordds, I wanted to:
 
-
-
-FILES:
-
-"CS555_Final_Project_Lee.pdf": Analysis and Code
-
-"CS555_Final_Project_Lee.Rmd": R markdown of analysis and code
-
-"music_genre.csv": Spotify dataset
+* Determine if any of the music features of songs can help predict the popularity of a song using linear regression
+* Check for a mean popularity difference between three genres (“Anime”, “Hip-Hop” and “Electronic”)
+* Build a classification model that can determine if a Spotify is "Anime" genre
 
 
+### Methods Used
+* Linear Regression
+* Logistic Regression
+* ROC Curve
+* Analysis of Variance ANOVA 
+* Hypothesis Testing
+* Tukey's Method
 
+
+### Technologies 
+* Python
+* Jupyter Notebook
+
+
+## Resources
+
+* https://www.kaggle.com/datasets/vicsuperman/prediction-of-music-genre (Dataset)
